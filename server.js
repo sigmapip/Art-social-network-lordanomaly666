@@ -203,7 +203,7 @@ app.get('/', async (req, res) => {
             const pass = document.getElementById('admin-password-input').value;
             fetch('/auth-admin', {
               method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ password: pass })
           })
           .then(res => res.json())
@@ -392,4 +392,3 @@ app.post('/delete/:id', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Сервер запущен на порту ${PORT}`);
 });
-
