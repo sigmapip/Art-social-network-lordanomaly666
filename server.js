@@ -139,75 +139,71 @@ app.get('/', async (req, res) => {
           <div class="timer-val" id="countdown-timer">05:00</div>
           <button onclick="hideTimerScreen()" style="background:#0095f6; color:white; border:none; padding:10px 20px; font-weight:bold; border-radius:5px; cursor:pointer; width:auto;">Вернуться</button>
         </div>
-    `);
-  } catch (err) {
-    res.status(500).send('Ошибка загрузки ленты: ' + err.message);
-  }
-});
-      <script>
-        window.onload = function() {
-          if (localStorage.getItem('isAdmin') === 'true') {
-            showAdminFeatures();
-          }
-        }
 
-        function handleFormSubmit(form) {
-          const isAdmin = localStorage.getItem('isAdmin') === 'true';
-          const pass = localStorage.getItem('adminPassword') || '';
-          document.getElementById('form-admin-password').value = pass;
-
-          if (isAdmin) return true;
-
-          const lastPost = localStorage.getItem('lastPostTime');
-          const now = Date.now();
-          const limit = 5 * 60 * 1000;
-
-          if (lastPost && (now - lastPost < limit)) {
-            const timeLeftMs = limit - (now - lastPost);
-            showTimerScreen(Math.ceil(timeLeftMs / 1000));
-            return false;
-          }
-
-          localStorage.setItem('lastPostTime', now);
-          return true;
-        }
-
-        let timerInterval;
-        function showTimerScreen(totalSeconds) {
-          document.getElementById('main-content').style.display = 'none';
-          const timerZone = document.getElementById('timer-zone');
-          timerZone.style.display = 'block';
-
-          let secondsLeft = totalSeconds;
-          const timerDiv = document.getElementById('countdown-timer');
-
-          clearInterval(timerInterval);
-          function updateTimer() {
-            if (secondsLeft <= 0) {
-              hideTimerScreen();
-              return;
+        <script>
+          window.onload = function() {
+            if (localStorage.getItem('isAdmin') === 'true') {
+              showAdminFeatures();
             }
-            let mins = Math.floor(secondsLeft / 60);
-            let secs = secondsLeft % 60;
-            timerDiv.innerText = (mins < 10 ? '0' : '') + mins + ':' + (secs < 10 ? '0' : '') + secs;
-            secondsLeft--;
           }
 
-          updateTimer();
-          timerInterval = setInterval(updateTimer, 1000);
-        }
+          function handleFormSubmit(form) {
+            const isAdmin = localStorage.getItem('isAdmin') === 'true';
+            const pass = localStorage.getItem('adminPassword') || '';
+            document.getElementById('form-admin-password').value = pass;
 
-        function hideTimerScreen() {
-          clearInterval(timerInterval);
-          document.getElementById('timer-zone').style.display = 'none';
-          document.getElementById('main-content').style.display = 'block';
-        }
+            if (isAdmin) return true;
 
-        function checkAdminPassword() {
-          const pass = document.getElementById('admin-password-input').value;
-          fetch('/auth-admin', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            const lastPost = localStorage.getItem('lastPostTime');
+            const now = Date.now();
+            const limit = 5 * 60 * 1000;
+
+            if (lastPost && (now - lastPost < limit)) {
+              const timeLeftMs = limit - (now - lastPost);
+              showTimerScreen(Math.ceil(timeLeftMs / 1000));
+              return false;
+            }
+
+            localStorage.setItem('lastPostTime', now);
+            return true;
+          }
+
+          let timerInterval;
+          function showTimerScreen(totalSeconds) {
+            document.getElementById('main-content').style.display = 'none';
+            const timerZone = document.getElementById('timer-zone');
+            timerZone.style.display = 'block';
+
+            let secondsLeft = totalSeconds;
+            const timerDiv = document.getElementById('countdown-timer');
+
+            clearInterval(timerInterval);
+            function updateTimer() {
+              if (secondsLeft <= 0) {
+                hideTimerScreen();
+                return;
+              }
+              let mins = Math.floor(secondsLeft / 60);
+              let secs = secondsLeft % 60;
+              timerDiv.innerText = (mins < 10 ? '0' : '') + mins + ':' + (secs < 10 ? '0' : '') + secs;
+              secondsLeft--;
+            }
+
+            updateTimer();
+            timerInterval = setInterval(updateTimer, 1000);
+          }
+
+          function hideTimerScreen() {
+            clearInterval(timerInterval);
+            document.getElementById('timer-zone').style.display = 'none';
+            document.getElementById('main-content').style.display = 'block';
+          }
+
+          function checkAdminPassword() {
+            const pass = document.getElementById('admin-password-input').value;
+            fetch('/auth-admin', {
+              method: 'POST',
+headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ password: pass })
           })
           .then(res => res.json())
@@ -396,4 +392,3 @@ app.post('/delete/:id', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Сервер запущен на порту ${PORT}`);
 });
-
