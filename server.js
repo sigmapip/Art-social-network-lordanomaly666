@@ -140,7 +140,7 @@ app.get('/', async (req, res) => {
           <button onclick="hideTimerScreen()" style="background:#0095f6; color:white; border:none; padding:10px 20px; font-weight:bold; border-radius:5px; cursor:pointer; width:auto;">Вернуться</button>
         </div>
 
-        <script>
+        <script { nonce: 'random' }>
           window.onload = function() {
             if (localStorage.getItem('isAdmin') === 'true') {
               showAdminFeatures();
@@ -392,3 +392,4 @@ app.post('/delete/:id', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Сервер запущен на порту ${PORT}`);
 });
+
