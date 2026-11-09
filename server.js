@@ -1,147 +1,96 @@
 const express = require('express');
-const multer = require('multer');
-const path = require('path');
-const app = express();
-const PORT = process.env.PORT || 3000;
+                location.reload();
+              } else {
+                alert(data.message || 'Ошибка при удалении');
+              }
+            });
+          }
+        }
+      </script>
+    </body>
+    </html>
+  `);
+});
 
-const storage = multer.memoryStorage();
-const upload = multer({ storage: storage });
-
-// Глобальная база данных в оперативной памяти сервера
-let posts = [
-  {
-    id: 1,
-    title: "Демонстрационный арт",
-    author: "Система",
-    image: "data:image/svg+xml;utf8,<svg xmlns='http://w3.org' width='100' height='100' viewBox='0 0 100 100'><rect width='100' stroke='%23ccc' stroke-width='2' fill='%23eee'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='10' fill='%23666'>Здесь будет ваш арт</text></svg>",
-    likes: 5,
+// Обработка загрузки на сервере
+app.post('/upload', upload.single('artImage'), (req, res) => {
+  if (!req.file) return res.redirect('/');
+  
+  const isAdmin = req.body.adminPassword === ADMIN_PASSWORD;
+  const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+  
+  const newPost = {
+    id: Date.now(),
+    title: req.body.title || 'Без названия',
+    author: req.body.author || 'Аноним',
+    image: base64Image,
+    likes: 0,
     adminLikes: 0,
-    likedBy: [],      
+    likedBy: [],
     adminLikedBy: [],
-    isAdminPost: true
+    isAdminPost: isAdmin
+  };
+  
+  posts.push(newPost);
+  res.redirect('/');
+});
+
+app.post('/auth-admin', (req, res) => {
+  if (req.body.password === ADMIN_PASSWORD) {
+    res.json({ success: true });
+  } else {
+    res.json({ success: false });
   }
-];
+});
 
-const ADMIN_PASSWORD = "90684e3";
-const FLOOD_LIMIT_MS = 5 * 60 * 1000; // 5 минут
+app.post('/like/:id', (req, res) => {
+  const postId = parseInt(req.params.id);
+  const userIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+  const post = posts.find(p => p.id === postId);
+  
+  if (!post) return res.json({ success: false, message: 'Пост не найден' });
+  
+  if (post.likedBy.includes(userIp)) {
+    return res.json({ success: false, message: 'Вы уже лайкнули этот арт!' });
+  }
+  
+  post.likes += 1;
+  post.likedBy.push(userIp); 
+  res.json({ success: true, likes: post.likes });
+});
 
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+app.post('/admin-like/:id', (req, res) => {
+  if (req.body.password !== ADMIN_PASSWORD) {
+    return res.json({ success: false, message: 'Неверный пароль администратора!' });
+  }
 
-// Главная страница
-app.get('/', (req, res) => {
-  const sortedPosts = [...posts].sort((a, b) => {
-    if (b.adminLikes !== a.adminLikes) {
-      return b.adminLikes - a.adminLikes;
-    }
-    return b.id - a.id;
-  });
+  const postId = parseInt(req.params.id);
+  const userIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+  const post = posts.find(p => p.id === postId);
+  
+  if (!post) return res.json({ success: false, message: 'Пост не найден' });
+  
+  if (post.adminLikedBy.includes(userIp)) {
+    return res.json({ success: false, message: 'Вы уже поставили админ-лайк этому арту!' });
+  }
 
-  let postsHtml = sortedPosts.map(post => {
-    const adminBadge = post.isAdminPost ? '<span class="admin-badge">✔️ Администратор</span>' : '';
-    
-    return `
-    <div class="post" id="post-${post.id}">
-      <img src="${post.image}" alt="${post.title}">
-      <div class="post-info">
-        <h3>${post.title}</h3>
-        <p>Автор: <strong>${post.author}</strong> ${adminBadge}</p>
-        <div class="post-actions">
-          <button class="btn-like" onclick="likePost(${post.id})">❤️ <span id="like-count-${post.id}">${post.likes}</span></button>
-          <span class="admin-heart-display">💙 <span id="admin-like-count-${post.id}">${post.adminLikes}</span></span>
-          <button class="btn-admin-action btn-admin-like admin-only" onclick="adminLikePost(${post.id})" style="display:none;">💙 Поставить</button>
-          <button class="btn-admin-action btn-delete admin-only" onclick="deletePost(${post.id})" style="display:none;">🗑️ Удалить</button>
-        </div>
-      </div>
-    </div>
-    `;
-  }).join('');
+  post.adminLikes += 1;
+  post.adminLikedBy.push(userIp);
+  res.json({ success: true, adminLikes: post.adminLikes });
+});
 
-  res.send(`
-    <!DOCTYPE html>
-    <html lang="ru">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Арт-Соцсеть</title>
-      <style>
-        body { font-family: sans-serif; background: #fafafa; margin: 0; padding: 20px; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; }
-        
-        .admin-auth-bar { background: #333; color: white; padding: 10px 15px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-        .admin-auth-bar input { width: auto; flex-grow: 1; margin: 0; padding: 6px; border: none; border-radius: 4px; }
-        .admin-auth-bar button { width: auto; margin: 0; padding: 6px 15px; background: #222; color: #fff; border: 1px solid #555; border-radius: 4px; cursor: pointer; }
-        .admin-status { font-weight: bold; color: #ffdd57; display: none; }
+app.post('/delete/:id', (req, res) => {
+  if (req.body.password !== ADMIN_PASSWORD) {
+    return res.json({ success: false, message: 'Неверный пароль администратора!' });
+  }
 
-        header { text-align: center; margin-bottom: 30px; }
-        form { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 30px; }
-        input, button, textarea { width: 100%; padding: 10px; margin: 5px 0 15px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
-        .btn-submit { background: #0095f6; color: white; border: none; font-weight: bold; cursor: pointer; }
-        
-        .post { background: white; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 25px; overflow: hidden; }
-        .post img { width: 100%; display: block; max-height: 500px; object-fit: contain; background: #f0f0f0; }
-        .post-info { padding: 15px; }
-        .post-info h3 { margin: 0 0 5px 0; }
-        .post-info p { margin: 0 0 15px 0; color: #777; display: flex; align-items: center; gap: 5px; }
-        
-        .admin-badge { background: #1d9bf0; color: white; font-size: 11px; padding: 2px 6px; border-radius: 10px; font-weight: bold; }
-        .post-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .btn-like { width: auto; background: #eee; color: #333; padding: 6px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
-        .admin-heart-display { background: #e8f4fd; color: #1d9bf0; padding: 6px 12px; border-radius: 5px; font-weight: bold; font-size: 14px; }
-        .btn-admin-action { width: auto; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 14px; font-weight: bold; }
-        .btn-admin-like { background: #1d9bf0; color: white; border: none; }
-        .btn-delete { background: #ffebeb; color: #ff4d4d; border: 1px solid #ffccd0; }
-        
-        /* Стили для экрана таймера */
-        .timer-screen { display: none; text-align: center; padding: 50px 20px; background: white; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .timer-val { font-size: 48px; font-weight: bold; color: #ff4d4d; margin: 20px 0; }
-      </style>
-    </head>
-    <body>
-      <div class="container" id="main-content">
-        
-        <div class="admin-auth-bar">
-          <div id="auth-input-zone" style="display: flex; width: 100%; gap: 10px; align-items: center;">
-            <label style="font-size: 13px; white-space: nowrap;">Пароль админа:</label>
-            <input type="password" id="admin-password-input" placeholder="Введите ключ...">
-            <button onclick="checkAdminPassword()">Войти</button>
-          </div>
-          <div id="auth-success-zone" class="admin-status">⚡ Вы вошли как Администратор</div>
-        </div>
+  const postId = parseInt(req.params.id);
+  posts = posts.filter(p => p.id !== postId);
+  res.json({ success: true });
+});
 
-        <header>
-          <h1>🎨 Наша Арт Соцсеть</h1>
-          <p>Поделись своим творчеством!</p>
-        </header>
-
-        <form action="/upload" method="POST" enctype="multipart/form-data" onsubmit="return handleFormSubmit(this)">
-          <input type="hidden" name="adminPassword" id="form-admin-password" value="">
-          
-          <label>Название арта:</label>
-          <input type="text" name="title" required placeholder="Например: Ночной пейзаж">
-          
-          <label>Ваш никнейм:</label>
-          <input type="text" name="author" required placeholder="Например: Художник99">
-          
-          <label>Выберите файл арта:</label>
-          <input type="file" name="artImage" accept="image/*" required>
-          
-          <button type="submit" class="btn-submit">Опубликовать в ленту</button>
-        </form>
-
-        <div id="feed">
-          ${postsHtml}
-        </div>
-      </div>
-
-      <!-- Экран живого таймера, если лимит превышен -->
-      <div class="container id="timer-zone" class="timer-screen">
-        <h2 style="font-size:32px; margin-bottom:10px;">🛑 Ограничение спама</h2>
-        <p style="font-size:16px; color:#666;">Публиковать арты можно раз в 5 минут.</p>
-        <div class="timer-val" id="countdown-timer">05:00</div>
-        <button onclick="hideTimerScreen()" style="background:#0095f6; color:white; border:none; padding:10px 20px; font-weight:bold; border-radius:5px; cursor:pointer; width:auto;">Вернуться</button>
-      </div>
-
+app.listen(PORT, () => {
+  console.log(`Сервер запущен на порту 
 <script>
         window.onload = function() {
           if (localStorage.getItem('isAdmin') === 'true') {
@@ -149,25 +98,23 @@ app.get('/', (req, res) => {
           }
         }
 
-        // Проверка лимитов перед отправкой формы прямо в браузере
         function handleFormSubmit(form) {
           const isAdmin = localStorage.getItem('isAdmin') === 'true';
           const pass = localStorage.getItem('adminPassword') || '';
           document.getElementById('form-admin-password').value = pass;
 
-          if (isAdmin) return true; // Админам публиковать можно без ограничений
+          if (isAdmin) return true;
 
           const lastPost = localStorage.getItem('lastPostTime');
           const now = Date.now();
-          const limit = 5 * 60 * 1000; // 5 минут
+          const limit = 5 * 60 * 1000;
 
           if (lastPost && (now - lastPost < limit)) {
             const timeLeftMs = limit - (now - lastPost);
             showTimerScreen(Math.ceil(timeLeftMs / 1000));
-            return false; // Отменяем отправку формы, чтобы данные в полях не стирались
+            return false;
           }
 
-          // Если лимит пройден, запоминаем время перед отправкой
           localStorage.setItem('lastPostTime', now);
           return true;
         }
@@ -287,27 +234,41 @@ app.get('/', (req, res) => {
   `);
 });
 
-// Обработка загрузки на сервере
-app.post('/upload', upload.single('artImage'), (req, res) => {
+// Обработка загрузки постов с отправкой файла на ImgBB и записью в PostgreSQL
+app.post('/upload', upload.single('artImage'), async (req, res) => {
   if (!req.file) return res.redirect('/');
   
-  const isAdmin = req.body.adminPassword === ADMIN_PASSWORD;
-  const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-  
-  const newPost = {
-    id: Date.now(),
-    title: req.body.title || 'Без названия',
-    author: req.body.author || 'Аноним',
-    image: base64Image,
-    likes: 0,
-    adminLikes: 0,
-    likedBy: [],
-    adminLikedBy: [],
-    isAdminPost: isAdmin
-  };
-  
-  posts.push(newPost);
-  res.redirect('/');
+  try {
+    const isAdmin = req.body.adminPassword === ADMIN_PASSWORD;
+    
+    // Переводим файл в base64 формат, необходимый для ImgBB API
+    const base64File = req.file.buffer.toString('base64');
+    
+    // Формируем запрос к API ImgBB
+    const formData = new URLSearchParams();
+    formData.append('image', base64File);
+
+    const imgbbRes = await axios.post(`https://imgbb.com{process.env.IMGBB_API_KEY}`, formData);
+    
+    // Получаем прямую надежную ссылку на сохраненную картинку
+    const imageUrl = imgbbRes.data.data.url;
+
+    const postId = Date.now();
+    const title = req.body.title || 'Без названия';
+    const author = req.body.author || 'Аноним';
+
+    // Сохраняем все данные в вашу базу PostgreSQL
+    await client.query(
+      `INSERT INTO posts (id, title, author, image, likes, admin_likes, liked_by, admin_liked_by, is_admin_post) 
+       VALUES ($1, $2, $3, $4, 0, 0, '[]', '[]', $5)`,
+      [postId, title, author, imageUrl, isAdmin]
+    );
+
+    res.redirect('/');
+  } catch (err) {
+    console.error('Ошибка публикации:', err);
+    res.status(500).send('Не удалось выложить арт. Проверьте логи на Render. Ошибка: ' + err.message);
+  }
 });
 
 app.post('/auth-admin', (req, res) => {
@@ -318,52 +279,77 @@ app.post('/auth-admin', (req, res) => {
   }
 });
 
-app.post('/like/:id', (req, res) => {
-  const postId = parseInt(req.params.id);
-  const userIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-  const post = posts.find(p => p.id === postId);
-  
-  if (!post) return res.json({ success: false, message: 'Пост не найден' });
-  
-  if (post.likedBy.includes(userIp)) {
-    return res.json({ success: false, message: 'Вы уже лайкнули этот арт!' });
+// Роут обычных лайков с сохранением в БД
+app.post('/like/:id', async (req, res) => {
+  try {
+    const postId = req.params.id;
+    const userIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    
+    const postRes = await client.query('SELECT * FROM posts WHERE id = $1', [postId]);
+    if (postRes.rows.length === 0) return res.json({ success: false, message: 'Пост не найден' });
+    
+    const post = postRes.rows[0];
+    let likedBy = JSON.parse(post.liked_by || '[]');
+    
+    if (likedBy.includes(userIp)) {
+      return res.json({ success: false, message: 'Вы уже лайкнули этот арт!' });
+    }
+    
+    likedBy.push(userIp);
+    const newLikes = (post.likes || 0) + 1;
+    
+    await client.query('UPDATE posts SET likes = $1, liked_by = $2 WHERE id = $3', [newLikes, JSON.stringify(likedBy), postId]);
+    res.json({ success: true, likes: newLikes });
+  } catch (err) {
+    res.json({ success: false, message: err.message });
   }
-  
-  post.likes += 1;
-  post.likedBy.push(userIp); 
-  res.json({ success: true, likes: post.likes });
 });
 
-app.post('/admin-like/:id', (req, res) => {
-  if (req.body.password !== ADMIN_PASSWORD) {
-    return res.json({ success: false, message: 'Неверный пароль администратора!' });
+// Роут админских лайков с сохранением в БД
+app.post('/admin-like/:id', async (req, res) => {
+  try {
+    if (req.body.password !== ADMIN_PASSWORD) {
+      return res.json({ success: false, message: 'Неверный пароль!' });
+    }
+    
+    const postId = req.params.id;
+    const userIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    
+    const postRes = await client.query('SELECT * FROM posts WHERE id = $1', [postId]);
+    if (postRes.rows.length === 0) return res.json({ success: false, message: 'Пост не найден' });
+    
+    const post = postRes.rows[0];
+    let adminLikedBy = JSON.parse(post.admin_liked_by || '[]');
+    
+    if (adminLikedBy.includes(userIp)) {
+      return res.json({ success: false, message: 'Вы уже поставили админ-лайк!' });
+    }
+    
+    adminLikedBy.push(userIp);
+    const newAdminLikes = (post.admin_likes || 0) + 1;
+    
+    await client.query('UPDATE posts SET admin_likes = $1, admin_liked_by = $2 WHERE id = $3', [newAdminLikes, JSON.stringify(adminLikedBy), postId]);
+    res.json({ success: true, adminLikes: newAdminLikes });
+  } catch (err) {
+    res.json({ success: false, message: err.message });
   }
-
-  const postId = parseInt(req.params.id);
-  const userIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-  const post = posts.find(p => p.id === postId);
-  
-  if (!post) return res.json({ success: false, message: 'Пост не найден' });
-  
-  if (post.adminLikedBy.includes(userIp)) {
-    return res.json({ success: false, message: 'Вы уже поставили админ-лайк этому арту!' });
-  }
-
-  post.adminLikes += 1;
-  post.adminLikedBy.push(userIp);
-  res.json({ success: true, adminLikes: post.adminLikes });
 });
 
-app.post('/delete/:id', (req, res) => {
-  if (req.body.password !== ADMIN_PASSWORD) {
-    return res.json({ success: false, message: 'Неверный пароль администратора!' });
+// Удаление постов из базы данных
+app.post('/delete/:id', async (req, res) => {
+  try {
+    if (req.body.password !== ADMIN_PASSWORD) {
+      return res.json({ success: false, message: 'Доступ запрещен' });
+    }
+    const postId = req.params.id;
+    await client.query('DELETE FROM posts WHERE id = $1', [postId]);
+    res.json({ success: true });
+  } catch (err) {
+    res.json({ success: false, message: err.message });
   }
-
-  const postId = parseInt(req.params.id);
-  posts = posts.filter(p => p.id !== postId);
-  res.json({ success: true });
 });
 
 app.listen(PORT, () => {
   console.log(`Сервер запущен на порту ${PORT}`);
 });
+ 
